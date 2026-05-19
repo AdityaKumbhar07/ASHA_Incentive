@@ -2,6 +2,16 @@ import JSZip from "jszip"
 import { saveAs } from "file-saver"
 
 export async function generateExcel(headerData, normData, sheet1Data) {
+  const buffer = await generateExcelBuffer(headerData, normData, sheet1Data)
+
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  })
+
+  saveAs(blob, `ASHA_Report_${headerData.month}_${headerData.year || ""}.xlsx`)
+}
+
+export async function generateExcelBuffer(headerData, normData, sheet1Data) {
   const response = await fetch("/template.xlsx")
   const arrayBuffer = await response.arrayBuffer()
   const zip = await JSZip.loadAsync(arrayBuffer)
@@ -9,13 +19,22 @@ export async function generateExcel(headerData, normData, sheet1Data) {
   // ─── SHARED STRINGS ───────────────────────────────────
   const ssFile = zip.file("xl/sharedStrings.xml")
   let ssXml = await ssFile.async("string")
-  
+
+  // Parse shared strings — preserve original raw XML fragments
   const siRegex = /<si>([\s\S]*?)<\/si>/g
-  let sharedStrings = []
+  const originalSiFragments = []   // raw XML inside each <si>...</si>
+  const sharedStringsText = []     // plain-text version for lookup
   let m
   while ((m = siRegex.exec(ssXml)) !== null) {
-    const tMatch = m[1].match(/<t[^>]*>([^<]*)<\/t>/)
-    sharedStrings.push(tMatch ? tMatch[1] : "")
+    originalSiFragments.push(m[1])
+    // Extract all <t> contents and join them (handles rich-text with multiple <r><t>...</t></r>)
+    const allT = []
+    const tRegex = /<t[^>]*>([^<]*)<\/t>/g
+    let tm
+    while ((tm = tRegex.exec(m[1])) !== null) {
+      allT.push(tm[1])
+    }
+    sharedStringsText.push(allT.join(""))
   }
 
   function escapeXml(str) {
@@ -28,16 +47,18 @@ export async function generateExcel(headerData, normData, sheet1Data) {
 
   function getOrAddString(str) {
     const s = String(str)
-    const idx = sharedStrings.indexOf(s)
+    const idx = sharedStringsText.indexOf(s)
     if (idx !== -1) return idx
-    sharedStrings.push(s)
-    return sharedStrings.length - 1
+    // Add new string — store both plain text and raw XML fragment
+    sharedStringsText.push(s)
+    originalSiFragments.push(`<t xml:space="preserve">${escapeXml(s)}</t>`)
+    return sharedStringsText.length - 1
   }
 
   function buildSSXml() {
-    const count = sharedStrings.length
-    const items = sharedStrings
-      .map(s => `<si><t xml:space="preserve">${escapeXml(s)}</t></si>`)
+    const count = originalSiFragments.length
+    const items = originalSiFragments
+      .map(fragment => `<si>${fragment}</si>`)
       .join("")
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ` +
@@ -48,7 +69,7 @@ export async function generateExcel(headerData, normData, sheet1Data) {
   function setNumber(xml, addr, num) {
     const val = Math.max(0, Math.round(Number(num) || 0))
 
-    const selfClose = new RegExp(`<c r="${addr}"([^>]*?)/>`)
+    const selfClose = new RegExp(`<c r="${addr}"([^>]*?)\\s*/>`)
     if (selfClose.test(xml)) {
       return xml.replace(selfClose, (_, attrs) => {
         const cleanAttrs = attrs.replace(/\s*t="[^"]*"/, "")
@@ -56,7 +77,7 @@ export async function generateExcel(headerData, normData, sheet1Data) {
       })
     }
 
-    const normal = new RegExp(`<c r="${addr}"([^>]*?)>[\\s\\S]*?<\\/c>`)
+    const normal = new RegExp(`<c r="${addr}"([^>]*?)>([\\s\\S]*?)<\\/c>`)
     if (normal.test(xml)) {
       return xml.replace(normal, (_, attrs) => {
         const cleanAttrs = attrs.replace(/\s*t="[^"]*"/, "")
@@ -65,7 +86,7 @@ export async function generateExcel(headerData, normData, sheet1Data) {
     }
 
     const rowNum = addr.replace(/[A-Z]+/, "")
-    const rowRe = new RegExp(`(<row[^>]* r="${rowNum}"[^>]*>)([\\s\\S]*?)(<\\/row>)`)
+    const rowRe = new RegExp(`(<row[^>]* r="${rowNum}"[^/][^>]*>)([\\s\\S]*?)(<\\/row>)`)
     return xml.replace(rowRe, (_, rOpen, rContent, rClose) => {
       return `${rOpen}${rContent}<c r="${addr}"><v>${val}</v></c>${rClose}`
     })
@@ -74,7 +95,7 @@ export async function generateExcel(headerData, normData, sheet1Data) {
   function setString(xml, addr, str) {
     const idx = getOrAddString(str)
 
-    const selfClose = new RegExp(`<c r="${addr}"([^>]*?)/>`)
+    const selfClose = new RegExp(`<c r="${addr}"([^>]*?)\\s*/>`)
     if (selfClose.test(xml)) {
       return xml.replace(selfClose, (_, attrs) => {
         const cleanAttrs = attrs.replace(/\s*t="[^"]*"/, "")
@@ -82,7 +103,7 @@ export async function generateExcel(headerData, normData, sheet1Data) {
       })
     }
 
-    const normal = new RegExp(`<c r="${addr}"([^>]*?)>[\\s\\S]*?<\\/c>`)
+    const normal = new RegExp(`<c r="${addr}"([^>]*?)>([\\s\\S]*?)<\\/c>`)
     if (normal.test(xml)) {
       return xml.replace(normal, (_, attrs) => {
         const cleanAttrs = attrs.replace(/\s*t="[^"]*"/, "")
@@ -91,7 +112,7 @@ export async function generateExcel(headerData, normData, sheet1Data) {
     }
 
     const rowNum = addr.replace(/[A-Z]+/, "")
-    const rowRe = new RegExp(`(<row[^>]* r="${rowNum}"[^>]*>)([\\s\\S]*?)(<\\/row>)`)
+    const rowRe = new RegExp(`(<row[^>]* r="${rowNum}"[^/][^>]*>)([\\s\\S]*?)(<\\/row>)`)
     return xml.replace(rowRe, (_, rOpen, rContent, rClose) => {
       return `${rOpen}${rContent}<c r="${addr}" t="s"><v>${idx}</v></c>${rClose}`
     })
@@ -99,19 +120,16 @@ export async function generateExcel(headerData, normData, sheet1Data) {
 
   // ─── PRINT SETTINGS ───────────────────────────────────
   function setPrintSettings(xml, orientation) {
-    // Set sheetPr fitToPage
-    // Handle sheetPr - only update pageSetUpPr, don't replace entire tag
-if (/<pageSetUpPr[^>]*\/>/.test(xml)) {
-  xml = xml.replace(/<pageSetUpPr[^>]*\/>/, `<pageSetUpPr fitToPage="1"/>`)
-} else if (/<sheetPr\/>/.test(xml)) {
-  xml = xml.replace(/<sheetPr\/>/, `<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>`)
-} else if (/<sheetPr>/.test(xml)) {
-  xml = xml.replace(/<sheetPr>/, `<sheetPr><pageSetUpPr fitToPage="1"/>`)
-} else {
-  xml = xml.replace(/<sheetData>/, `<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetData>`)
-}
+    if (/<pageSetUpPr[^>]*\/>/.test(xml)) {
+      xml = xml.replace(/<pageSetUpPr[^>]*\/>/, `<pageSetUpPr fitToPage="1"/>`)
+    } else if (/<sheetPr\/>/.test(xml)) {
+      xml = xml.replace(/<sheetPr\/>/, `<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>`)
+    } else if (/<sheetPr>/.test(xml)) {
+      xml = xml.replace(/<sheetPr>/, `<sheetPr><pageSetUpPr fitToPage="1"/>`)
+    } else {
+      xml = xml.replace(/<sheetData>/, `<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetData>`)
+    }
 
-    // Replace pageSetup
     const pageSetup = `<pageSetup paperSize="9" orientation="${orientation}" fitToWidth="1" fitToHeight="1" useFirstPageNumber="0"/>`
     if (/<pageSetup[^>]*\/>/.test(xml)) {
       xml = xml.replace(/<pageSetup[^>]*\/>/, pageSetup)
@@ -119,7 +137,6 @@ if (/<pageSetUpPr[^>]*\/>/.test(xml)) {
       xml = xml.replace(/<\/worksheet>/, `${pageSetup}</worksheet>`)
     }
 
-    // Replace margins
     const margins = `<pageMargins left="0.25" right="0.25" top="0.25" bottom="0.25" header="0" footer="0"/>`
     if (/<pageMargins[^>]*\/>/.test(xml)) {
       xml = xml.replace(/<pageMargins[^>]*\/>/, margins)
@@ -149,7 +166,7 @@ if (/<pageSetUpPr[^>]*\/>/.test(xml)) {
   s2 = setString(s2, "H4", `Asha Name : ${headerData.ashaName}`)
 
   // ─── SHEET 3 NORM VALUES ──────────────────────────────
-  const normCells = ["D3","D4","D6","D7","D12","D14","D19"]
+  const normCells = ["D3", "D4", "D6", "D7", "D12", "D14", "D19"]
   normCells.forEach(cell => {
     if (normData[cell] !== undefined) {
       s3 = setNumber(s3, cell, Number(normData[cell]))
@@ -158,8 +175,8 @@ if (/<pageSetUpPr[^>]*\/>/.test(xml)) {
 
   // ─── SHEET 1 DAILY DATA ───────────────────────────────
   const cols = [
-    "C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z",
-    "AA","AB","AC","AD","AE","AF","AG"
+    "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+    "AA", "AB", "AC", "AD", "AE", "AF", "AG"
   ]
 
   for (let rowIdx = 0; rowIdx < 17; rowIdx++) {
@@ -176,10 +193,11 @@ if (/<pageSetUpPr[^>]*\/>/.test(xml)) {
   s2 = setPrintSettings(s2, "portrait")
   s3 = setPrintSettings(s3, "landscape")
 
-  // ─── SET PRINT AREAS + FORCE RECALCULATION IN WORKBOOK ───
+  // ─── SET PRINT AREAS + FORCE RECALCULATION ────────────
   let wbXml = await zip.file("xl/workbook.xml").async("string")
 
-  const printAreas = `<definedNames>` +
+  const printAreas =
+    `<definedNames>` +
     `<definedName name="_xlnm.Print_Area" localSheetId="0">'Table ASHA 1'!$A$1:$AH$29</definedName>` +
     `<definedName name="_xlnm.Print_Area" localSheetId="1">'Table ASHA 2'!$A$1:$J$44</definedName>` +
     `<definedName name="_xlnm.Print_Area" localSheetId="2">'NORM'!$A$1:$H$20</definedName>` +
@@ -201,12 +219,12 @@ if (/<pageSetUpPr[^>]*\/>/.test(xml)) {
   zip.file("xl/worksheets/sheet3.xml", s3)
   zip.file("xl/sharedStrings.xml", buildSSXml())
 
-  // ─── DOWNLOAD ─────────────────────────────────────────
-  const blob = await zip.generateAsync({
-    type: "blob",
+  // ─── GENERATE BUFFER ──────────────────────────────────
+  const outBuffer = await zip.generateAsync({
+    type: "arraybuffer",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     compression: "DEFLATE"
   })
 
-  saveAs(blob, `ASHA_Report_${headerData.month}_${headerData.year}.xlsx`)
+  return outBuffer
 }
