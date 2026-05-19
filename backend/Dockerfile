@@ -1,8 +1,9 @@
 FROM node:18-bullseye
 
-# Install LibreOffice and required fonts for accurate Excel rendering
+# Install LibreOffice, python-uno, and required fonts
 RUN apt-get update && apt-get install -y \
     libreoffice \
+    python3-uno \
     fonts-liberation \
     fonts-croscore \
     && rm -rf /var/lib/apt/lists/*
@@ -14,7 +15,7 @@ COPY package.json ./
 RUN npm install
 
 # Copy application files
-COPY server.js ./
+COPY server.js convert.py ./
 
 # Expose port
 EXPOSE 3001

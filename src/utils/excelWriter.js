@@ -1,5 +1,6 @@
 import JSZip from "jszip"
 import { saveAs } from "file-saver"
+import { calculateSalary, calculateNormTargets } from "./salaryCalc"
 
 export async function generateExcel(headerData, normData, sheet1Data) {
   const buffer = await generateExcelBuffer(headerData, normData, sheet1Data)
@@ -15,6 +16,7 @@ export async function generateExcelBuffer(headerData, normData, sheet1Data) {
   const response = await fetch("/template.xlsx")
   const arrayBuffer = await response.arrayBuffer()
   const zip = await JSZip.loadAsync(arrayBuffer)
+
 
   // ─── SHARED STRINGS ───────────────────────────────────
   const ssFile = zip.file("xl/sharedStrings.xml")
@@ -79,9 +81,11 @@ export async function generateExcelBuffer(headerData, normData, sheet1Data) {
 
     const normal = new RegExp(`<c r="${addr}"([^>]*?)>([\\s\\S]*?)<\\/c>`)
     if (normal.test(xml)) {
-      return xml.replace(normal, (_, attrs) => {
+      return xml.replace(normal, (_, attrs, inner) => {
         const cleanAttrs = attrs.replace(/\s*t="[^"]*"/, "")
-        return `<c r="${addr}"${cleanAttrs}><v>${val}</v></c>`
+        const formulaMatch = inner.match(/<f[^>]*>[\s\S]*?<\/f>/)
+        const fTag = formulaMatch ? formulaMatch[0] : ""
+        return `<c r="${addr}"${cleanAttrs}>${fTag}<v>${val}</v></c>`
       })
     }
 

@@ -2,7 +2,7 @@ import { generateExcelBuffer } from "./excelWriter"
 import { saveAs } from "file-saver"
 
 // Set this to your deployed Render/Railway URL later!
-const BACKEND_URL = "http://localhost:3001/api/convert"
+const BACKEND_URL = "https://asha-incentive.onrender.com/api/convert"
 
 export async function generatePDF(headerData, normData, sheet1Data) {
   // 1. Generate the exact same Excel file buffer as the download
@@ -10,7 +10,7 @@ export async function generatePDF(headerData, normData, sheet1Data) {
 
   // 2. Create a FormData object to send to the backend
   const formData = new FormData()
-  
+
   // Convert ArrayBuffer to Blob for uploading
   const blob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
   formData.append("file", blob, "report.xlsx")
