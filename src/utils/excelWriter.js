@@ -177,7 +177,7 @@ export async function generateExcelBuffer(headerData, normData, sheet1Data) {
     }
   })
 
-  // ─── SHEET 1 DAILY DATA ───────────────────────────────
+  // ─── SHEET 1 DAILY DATA & TOTALS ───────────────────────────────
   const cols = [
     "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
     "AA", "AB", "AC", "AD", "AE", "AF", "AG"
@@ -186,11 +186,72 @@ export async function generateExcelBuffer(headerData, normData, sheet1Data) {
   for (let rowIdx = 0; rowIdx < 17; rowIdx++) {
     const values = sheet1Data[rowIdx] || new Array(31).fill(0)
     const excelRow = rowIdx + 5
+    let rowTotal = 0
     for (let dayIdx = 0; dayIdx < 31; dayIdx++) {
       const cell = `${cols[dayIdx]}${excelRow}`
-      s1 = setNumber(s1, cell, values[dayIdx])
+      const num = Number(values[dayIdx]) || 0
+      rowTotal += num
+      s1 = setNumber(s1, cell, num)
     }
+    // Inject Sheet 1 AH column totals (so LibreOffice sees them immediately)
+    s1 = setNumber(s1, `AH${excelRow}`, rowTotal)
   }
+
+  // ─── SHEET 2 CALCULATED VALUES ──────────────────────────────
+  const { rows: salaryRows, totalPayment } = calculateSalary(normData, sheet1Data)
+  
+  const mainRows = [6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
+  mainRows.forEach((r, i) => {
+    const row = salaryRows[i]
+    if (row) {
+      s2 = setNumber(s2, `E${r}`, row.performance)
+      s2 = setNumber(s2, `F${r}`, row.target === "-" ? 0 : Number(row.target))
+      s2 = setNumber(s2, `G${r}`, row.achievement === "-" ? 0 : Number(row.achievement))
+      s2 = setNumber(s2, `J${r}`, row.payment)
+    }
+  })
+
+  // Special rows
+  const jas = salaryRows[13]
+  if (jas) {
+    s2 = setNumber(s2, "E32", jas.performance)
+    s2 = setNumber(s2, "F32", Number(jas.target))
+    s2 = setNumber(s2, "G32", Number(jas.achievement))
+    s2 = setNumber(s2, "J32", jas.payment)
+  }
+  const vhsnd = salaryRows[14]
+  if (vhsnd) {
+    s2 = setNumber(s2, "E33", vhsnd.performance)
+    s2 = setNumber(s2, "F33", Number(vhsnd.target))
+    s2 = setNumber(s2, "G33", Number(vhsnd.achievement))
+    s2 = setNumber(s2, "J33", vhsnd.payment)
+  }
+  const ff = salaryRows[15]
+  if (ff) {
+    s2 = setNumber(s2, "E34", ff.performance)
+    s2 = setNumber(s2, "F34", Number(ff.target))
+    s2 = setNumber(s2, "G34", Number(ff.achievement))
+    s2 = setNumber(s2, "J34", ff.payment)
+  }
+  const hv = salaryRows[16]
+  if (hv) {
+    s2 = setNumber(s2, "E36", hv.performance)
+    s2 = setNumber(s2, "F36", Number(hv.target))
+    s2 = setNumber(s2, "G36", Number(hv.achievement))
+    s2 = setNumber(s2, "J36", hv.payment)
+  }
+  
+  // Total
+  s2 = setNumber(s2, "A38", totalPayment)
+
+  // ─── SHEET 3 CALCULATED TARGETS ────────────────────────────
+  const targets = calculateNormTargets(normData)
+  const targetMap = { F3: 0, F4: 1, F5: 2, F6: 3, F7: 4, F8: 5, F9: 6, F10: 7, F11: 8, F13: 9, F14: 10, F15: 11, F16: 12, F17: 13, F18: 14, F19: 15, F20: 16 }
+  Object.entries(targetMap).forEach(([addr, idx]) => {
+    if (targets[idx] !== undefined) {
+      s3 = setNumber(s3, addr, targets[idx])
+    }
+  })
 
   // ─── APPLY PRINT SETTINGS ─────────────────────────────
   s1 = setPrintSettings(s1, "landscape")
