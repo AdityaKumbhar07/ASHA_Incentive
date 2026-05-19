@@ -9,9 +9,9 @@ export function calculateNormTargets(normData) {
   const D19 = Number(normData.D19) || 0
 
   // Derived values exactly as Sheet 3 (NORM) formulas
-  const D5  = D4 * 0.90          // D5  = D4*90%
-  const D8  = D7                  // D8  = E7 = D7
-  const D9  = D8 * 0.2375        // D9  = D8*23.75%
+  const D5 = D4 * 0.90          // D5  = D4*90%
+  const D8 = D7                  // D8  = E7 = D7
+  const D9 = D8 * 0.2375        // D9  = D8*23.75%
   const D10 = D8                  // D10 = D8
   const D11 = D10 * 0.13         // D11 = D10*13%
   const F12 = D12                 // F12 = D12  (static, no /12)
@@ -24,13 +24,13 @@ export function calculateNormTargets(normData) {
 
   // Monthly targets (F column) — exactly as NORM sheet formulas
   // Sheet 2 uses ROUND(NORM!Fx, 0) as denominator → apply Math.round() here too
-  const F3  = Math.round(D3  / 12)   // F3  = ROUND(E3/12, 0)
-  const F4  = Math.round(D4  / 12)   // F4  = ROUND(E4/12, 0)
-  const F5  = Math.round(D5  / 12)   // F5  = ROUND(E5/12, 0)
-  const F6  = Math.round(D6  / 12)   // F6  = ROUND(E6/12, 0)
-  const F7  = Math.round(D7  / 12)   // F7  = ROUND(E7/12, 0)
-  const F8  = Math.round(D8  / 12)   // F8  = ROUND(E8/12, 0)
-  const F9  = Math.round(D9  / 12)   // F9  = ROUND(E9/12, 0)
+  const F3 = Math.round(D3 / 12)   // F3  = ROUND(E3/12, 0)
+  const F4 = Math.round(D4 / 12)   // F4  = ROUND(E4/12, 0)
+  const F5 = Math.round(D5 / 12)   // F5  = ROUND(E5/12, 0)
+  const F6 = Math.round(D6 / 12)   // F6  = ROUND(E6/12, 0)
+  const F7 = Math.round(D7 / 12)   // F7  = ROUND(E7/12, 0)
+  const F8 = Math.round(D8 / 12)   // F8  = ROUND(E8/12, 0)
+  const F9 = Math.round(D9 / 12)   // F9  = ROUND(E9/12, 0)
   const F10 = Math.round(D10 / 12)   // F10 = ROUND(E10/12, 0)
   const F11 = Math.round(D11 / 12)   // F11 = ROUND(E11/12, 0)
   // F12 = D12  (already computed above, integer input — no round needed)
@@ -102,38 +102,30 @@ export function calculateSalary(normData, sheet1Data) {
     })
   }
 
-  // Row 13 — JAS Meeting (Sheet2 row 32)
-  // G32 = E32*100/ROUND(F32,0)  →  achievement = count*100/Math.round(target)
-  // J32 = IF(ROUND(E32,0)>=1, 50, 0)
-  const jasCount  = totals[13]
-  const jasTarget = targets[13]                                        // F17 = 1
-  const jasAch    = jasTarget > 0 ? (jasCount * 100) / jasTarget : 0  // E*100/ROUND(F,0)
-  const jasPayment = Math.round(jasCount) >= 1 ? 50 : 0               // ROUND(E,0)>=1
+  // Row 13 — JAS Meeting — fixed 50rs rule
+  const jasCount = totals[13]
+  const jasPayment = jasCount >= 1 ? 50 : 0
   totalPayment += jasPayment
   rows.push({
     name: INDICATOR_NAMES[13],
     performance: jasCount,
-    target: jasTarget,
-    achievement: Math.round(jasAch * 10) / 10,
+    target: "-",
+    achievement: "-",
     payment: jasPayment,
-    rule: "ROUND(count,0)≥1 = ₹50"
+    rule: "≥1 meeting = ₹50"
   })
 
-  // Row 14 — VHSND (Sheet2 row 33)
-  // G33 = E33*100/ROUND(F33,0)  →  achievement = count*100/Math.round(target)
-  // J33 = IF(ROUND(E33,0)>=1, 50, 0)
-  const vhsndCount  = totals[14]
-  const vhsndTarget = targets[14]                                            // F18 = 3
-  const vhsndAch    = vhsndTarget > 0 ? (vhsndCount * 100) / vhsndTarget : 0
-  const vhsndPayment = Math.round(vhsndCount) >= 1 ? 50 : 0
+  // Row 14 — VHSND — fixed 50rs rule
+  const vhsndCount = totals[14]
+  const vhsndPayment = vhsndCount >= 1 ? 50 : 0
   totalPayment += vhsndPayment
   rows.push({
     name: INDICATOR_NAMES[14],
     performance: vhsndCount,
-    target: vhsndTarget,
-    achievement: Math.round(vhsndAch * 10) / 10,
+    target: "-",
+    achievement: "-",
     payment: vhsndPayment,
-    rule: "ROUND(count,0)≥1 = ₹50"
+    rule: "≥1 = ₹50"
   })
 
   // Row 15 — Footfall — targets[15] = F19
