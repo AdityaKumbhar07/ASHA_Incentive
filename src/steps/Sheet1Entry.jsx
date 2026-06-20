@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 const INDICATORS = [
   "Proportion of estimated pregnancies registered (First Trimester)",
@@ -50,6 +50,14 @@ export default function Sheet1Entry({ data, setData, onNext, onBack }) {
 
   const saved = data[currentRow]
 
+  useEffect(() => {
+    if (data[currentRow]) {
+      setPreview(data[currentRow])
+    } else {
+      setPreview(null)
+    }
+  }, [currentRow, data])
+
   const toggleDay = (day) => {
     setSelectedDays(prev =>
       prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
@@ -81,7 +89,7 @@ export default function Sheet1Entry({ data, setData, onNext, onBack }) {
   }
 
   const isLastRow = currentRow === INDICATORS.length - 1
-  const allSaved = Object.keys(data).length === INDICATORS.length
+  const allSaved = data[15] !== undefined && data[16] !== undefined
 
   return (
     <div>
@@ -89,6 +97,20 @@ export default function Sheet1Entry({ data, setData, onNext, onBack }) {
       <p style={{ color: "#666", fontSize: "13px", marginBottom: "16px" }}>
         Row {currentRow + 1} of {INDICATORS.length}
       </p>
+
+      {/* Row Selection */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "16px" }}>
+        {INDICATORS.map((_, i) => (
+          <button key={i} onClick={() => setCurrentRow(i)} style={{
+            width: "32px", height: "32px",
+            background: i === currentRow ? "#2c5282" : (data[i] ? "#bee3f8" : "#e2e8f0"),
+            color: i === currentRow ? "white" : (data[i] ? "#2c5282" : "#333"),
+            border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "bold"
+          }} title={INDICATORS[i]}>
+            {i + 1}
+          </button>
+        ))}
+      </div>
 
       {/* Row progress */}
       <div style={{ background: "#e2e8f0", borderRadius: "6px", height: "8px", marginBottom: "20px" }}>
@@ -185,29 +207,40 @@ export default function Sheet1Entry({ data, setData, onNext, onBack }) {
 
       {/* Preview */}
       {preview && (
-        <div style={{ marginTop: "16px", background: "#f7fafc", padding: "12px", borderRadius: "8px" }}>
-          <p style={{ fontWeight: "bold", marginBottom: "8px" }}>
-            Preview — Total: {preview.reduce((a, b) => a + b, 0)}
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+        <div style={{ marginTop: "16px", background: "#f7fafc", padding: "16px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+          <p style={{ fontWeight: "bold", marginBottom: "12px", color: "#2d3748" }}>Preview Data</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
             {preview.map((v, i) => (
               <div key={i} style={{
                 width: "36px", textAlign: "center", fontSize: "11px",
                 background: v > 0 ? "#bee3f8" : "#e2e8f0",
-                padding: "4px", borderRadius: "4px"
+                padding: "6px 4px", borderRadius: "4px"
               }}>
-                <div style={{ color: "#666" }}>{i + 1}</div>
-                <div style={{ fontWeight: "bold" }}>{v}</div>
+                <div style={{ color: "#4a5568", marginBottom: "2px" }}>{i + 1}</div>
+                <div style={{ fontWeight: "bold", fontSize: "13px", color: "#1a202c" }}>{v}</div>
               </div>
             ))}
           </div>
+
+          <div style={{
+            marginTop: "20px", paddingTop: "16px", borderTop: "2px solid #cbd5e0",
+            display: "flex", justifyContent: "space-between", alignItems: "center"
+          }}>
+            <span style={{ fontSize: "18px", fontWeight: "bold", color: "#2d3748" }}>Total Sum:</span>
+            <span style={{ fontSize: "24px", fontWeight: "bold", color: "#2c5282", background: "#bee3f8", padding: "6px 20px", borderRadius: "8px" }}>
+              {preview.reduce((a, b) => a + b, 0)}
+            </span>
+          </div>
+
+          <div style={{ marginTop: "24px", textAlign: "right" }}>
           <button onClick={handleSave} style={{
-            marginTop: "12px", padding: "10px 24px",
+            padding: "12px 28px",
             background: "#2c5282", color: "white",
-            border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px"
+            border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "15px", fontWeight: "bold"
           }}>
             {isLastRow ? "Save & Finish" : "Save & Next Row →"}
           </button>
+          </div>
         </div>
       )}
 

@@ -122,6 +122,33 @@ export async function generateExcelBuffer(headerData, normData, sheet1Data) {
     })
   }
 
+  function setFormula(xml, addr, formula, num) {
+    const val = Math.max(0, Math.round(Number(num) || 0))
+    const fTag = `<f>${formula}</f>`
+
+    const selfClose = new RegExp(`<c r="${addr}"([^>]*?)\\s*/>`)
+    if (selfClose.test(xml)) {
+      return xml.replace(selfClose, (_, attrs) => {
+        const cleanAttrs = attrs.replace(/\s*t="[^"]*"/, "")
+        return `<c r="${addr}"${cleanAttrs}>${fTag}<v>${val}</v></c>`
+      })
+    }
+
+    const normal = new RegExp(`<c r="${addr}"([^>]*?)>([\\s\\S]*?)<\\/c>`)
+    if (normal.test(xml)) {
+      return xml.replace(normal, (_, attrs) => {
+        const cleanAttrs = attrs.replace(/\s*t="[^"]*"/, "")
+        return `<c r="${addr}"${cleanAttrs}>${fTag}<v>${val}</v></c>`
+      })
+    }
+
+    const rowNum = addr.replace(/[A-Z]+/, "")
+    const rowRe = new RegExp(`(<row[^>]* r="${rowNum}"[^/][^>]*>)([\\s\\S]*?)(<\\/row>)`)
+    return xml.replace(rowRe, (_, rOpen, rContent, rClose) => {
+      return `${rOpen}${rContent}<c r="${addr}">${fTag}<v>${val}</v></c>${rClose}`
+    })
+  }
+
   // ─── PRINT SETTINGS ───────────────────────────────────
   function setPrintSettings(xml, orientation) {
     if (/<pageSetUpPr[^>]*\/>/.test(xml)) {
@@ -193,8 +220,8 @@ export async function generateExcelBuffer(headerData, normData, sheet1Data) {
       rowTotal += num
       s1 = setNumber(s1, cell, num)
     }
-    // Inject Sheet 1 AH column totals (so LibreOffice sees them immediately)
-    s1 = setNumber(s1, `AH${excelRow}`, rowTotal)
+    // Inject Sheet 1 AH column totals (with formula so LibreOffice recalculates on edit)
+    s1 = setFormula(s1, `AH${excelRow}`, `SUM(C${excelRow}:AG${excelRow})`, rowTotal)
   }
 
   // ─── SHEET 2 CALCULATED VALUES ──────────────────────────────
