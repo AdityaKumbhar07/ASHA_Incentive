@@ -83,7 +83,7 @@ export async function generateExcelBuffer(headerData, normData, sheet1Data) {
     if (normal.test(xml)) {
       return xml.replace(normal, (_, attrs, inner) => {
         const cleanAttrs = attrs.replace(/\s*t="[^"]*"/, "")
-        const formulaMatch = inner.match(/<f[^>]*>[\s\S]*?<\/f>/)
+        const formulaMatch = inner.match(/<f[^>]*>[\s\S]*?<\/f>|<f[^>]*\/>/i)
         const fTag = formulaMatch ? formulaMatch[0] : ""
         return `<c r="${addr}"${cleanAttrs}>${fTag}<v>${val}</v></c>`
       })
@@ -119,33 +119,6 @@ export async function generateExcelBuffer(headerData, normData, sheet1Data) {
     const rowRe = new RegExp(`(<row[^>]* r="${rowNum}"[^/][^>]*>)([\\s\\S]*?)(<\\/row>)`)
     return xml.replace(rowRe, (_, rOpen, rContent, rClose) => {
       return `${rOpen}${rContent}<c r="${addr}" t="s"><v>${idx}</v></c>${rClose}`
-    })
-  }
-
-  function setFormula(xml, addr, formula, num) {
-    const val = Math.max(0, Math.round(Number(num) || 0))
-    const fTag = `<f>${formula}</f>`
-
-    const selfClose = new RegExp(`<c r="${addr}"([^>]*?)\\s*/>`)
-    if (selfClose.test(xml)) {
-      return xml.replace(selfClose, (_, attrs) => {
-        const cleanAttrs = attrs.replace(/\s*t="[^"]*"/, "")
-        return `<c r="${addr}"${cleanAttrs}>${fTag}<v>${val}</v></c>`
-      })
-    }
-
-    const normal = new RegExp(`<c r="${addr}"([^>]*?)>([\\s\\S]*?)<\\/c>`)
-    if (normal.test(xml)) {
-      return xml.replace(normal, (_, attrs) => {
-        const cleanAttrs = attrs.replace(/\s*t="[^"]*"/, "")
-        return `<c r="${addr}"${cleanAttrs}>${fTag}<v>${val}</v></c>`
-      })
-    }
-
-    const rowNum = addr.replace(/[A-Z]+/, "")
-    const rowRe = new RegExp(`(<row[^>]* r="${rowNum}"[^/][^>]*>)([\\s\\S]*?)(<\\/row>)`)
-    return xml.replace(rowRe, (_, rOpen, rContent, rClose) => {
-      return `${rOpen}${rContent}<c r="${addr}">${fTag}<v>${val}</v></c>${rClose}`
     })
   }
 
@@ -220,8 +193,8 @@ export async function generateExcelBuffer(headerData, normData, sheet1Data) {
       rowTotal += num
       s1 = setNumber(s1, cell, num)
     }
-    // Inject Sheet 1 AH column totals (with formula so LibreOffice recalculates on edit)
-    s1 = setFormula(s1, `AH${excelRow}`, `SUM(C${excelRow}:AG${excelRow})`, rowTotal)
+    // Update cached value for Sheet 1 AH column while preserving any template formula
+    s1 = setNumber(s1, `AH${excelRow}`, rowTotal)
   }
 
   // ─── SHEET 2 CALCULATED VALUES ──────────────────────────────
@@ -269,7 +242,7 @@ export async function generateExcelBuffer(headerData, normData, sheet1Data) {
   }
   
   // Total
-  s2 = setNumber(s2, "A38", totalPayment)
+  s2 = setNumber(s2, "J38", totalPayment)
 
   // ─── SHEET 3 CALCULATED TARGETS ────────────────────────────
   const targets = calculateNormTargets(normData)

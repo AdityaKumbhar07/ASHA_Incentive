@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { generateExcel } from "../utils/excelWriter"
 import { generatePDF } from "../utils/pdfExport"
-
 export default function Export({ headerData, normData, sheet1Data, onBack }) {
   const [xlLoading, setXlLoading] = useState(false)
   const [xlDone, setXlDone] = useState(false)
@@ -37,6 +36,7 @@ export default function Export({ headerData, normData, sheet1Data, onBack }) {
     setPdfLoading(false)
   }
 
+
   const btnBase = {
     padding: "12px 28px",
     color: "white",
@@ -52,9 +52,9 @@ export default function Export({ headerData, normData, sheet1Data, onBack }) {
 
   return (
     <div>
-      <h2 style={{ marginBottom: "8px", color: "#2c5282" }}>Step 4 — Export</h2>
+      <h2 style={{ marginBottom: "8px", color: "#2c5282" }}>Step 4 — Download Final Report</h2>
       <p style={{ color: "#666", marginBottom: "24px" }}>
-        All data collected. Download your filled Excel file or a ready-to-print PDF.
+        Your data has been automatically saved to the cloud. Download your filled Excel file or PDF below.
       </p>
 
       {/* Checklist */}
@@ -73,35 +73,29 @@ export default function Export({ headerData, normData, sheet1Data, onBack }) {
       </div>
 
       {/* Error messages */}
-      {xlError && (
+      {(xlError || pdfError) && (
         <div style={{
           background: "#fff5f5", border: "1px solid #feb2b2",
           borderRadius: "8px", padding: "12px", marginBottom: "12px", color: "#c53030"
-        }}>{xlError}</div>
-      )}
-      {pdfError && (
-        <div style={{
-          background: "#fff5f5", border: "1px solid #feb2b2",
-          borderRadius: "8px", padding: "12px", marginBottom: "12px", color: "#c53030"
-        }}>{pdfError}</div>
+        }}>
+          {xlError && <div>{xlError}</div>}
+          {pdfError && <div>{pdfError}</div>}
+        </div>
       )}
 
       {/* Success messages */}
-      {xlDone && (
+      {(xlDone || pdfDone) && (
         <div style={{
           background: "#f0fff4", border: "1px solid #9ae6b4",
           borderRadius: "8px", padding: "12px", marginBottom: "12px", color: "#276749"
-        }}>✓ Excel downloaded! Open it and verify your data.</div>
-      )}
-      {pdfDone && (
-        <div style={{
-          background: "#f0fff4", border: "1px solid #9ae6b4",
-          borderRadius: "8px", padding: "12px", marginBottom: "12px", color: "#276749"
-        }}>✓ PDF downloaded successfully!</div>
+        }}>
+          {xlDone && <div style={{marginBottom:"4px"}}>✓ Excel downloaded!</div>}
+          {pdfDone && <div style={{marginBottom:"4px"}}>✓ PDF downloaded!</div>}
+        </div>
       )}
 
-      {/* Download buttons */}
-      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "24px" }}>
+      {/* Action buttons */}
+      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "32px", borderBottom: "1px solid #e2e8f0", paddingBottom: "24px" }}>
 
         {/* Excel */}
         <button
@@ -110,11 +104,13 @@ export default function Export({ headerData, normData, sheet1Data, onBack }) {
           style={{
             ...btnBase,
             background: xlLoading ? "#a0aec0" : "#2c5282",
-            cursor: xlLoading ? "not-allowed" : "pointer"
+            cursor: xlLoading ? "not-allowed" : "pointer",
+            flex: 1,
+            justifyContent: "center"
           }}
         >
           <span>📊</span>
-          {xlLoading ? "Generating Excel..." : "Download Excel (.xlsx)"}
+          {xlLoading ? "Generating..." : "Download Excel"}
         </button>
 
         {/* PDF */}
@@ -124,11 +120,13 @@ export default function Export({ headerData, normData, sheet1Data, onBack }) {
           style={{
             ...btnBase,
             background: pdfLoading ? "#a0aec0" : "#c53030",
-            cursor: pdfLoading ? "not-allowed" : "pointer"
+            cursor: pdfLoading ? "not-allowed" : "pointer",
+            flex: 1,
+            justifyContent: "center"
           }}
         >
           <span>📄</span>
-          {pdfLoading ? "Generating PDF..." : "Download PDF Replica"}
+          {pdfLoading ? "Generating..." : "Download PDF"}
         </button>
 
       </div>
@@ -139,4 +137,4 @@ export default function Export({ headerData, normData, sheet1Data, onBack }) {
       }}>← Back</button>
     </div>
   )
-}
+}

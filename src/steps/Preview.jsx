@@ -1,5 +1,8 @@
 import { useState } from "react"
 import { calculateSalary } from "../utils/salaryCalc"
+import { useAuth } from "../contexts/AuthContext"
+import { db } from "../config/firebase"
+import { doc, setDoc, serverTimestamp } from "firebase/firestore"
 
 const INDICATORS = [
   "Proportion of estimated pregnancies registered (First Trimester)",
@@ -31,10 +34,48 @@ const NORM_LABELS = [
   { key: "D19", label: "Footfalls" },
 ]
 
-export default function Preview({ headerData, normData, sheet1Data, onBack, onPrint }) {
+export default function Preview({ headerData, normData, sheet1Data, onBack, onPrint, adminOverrideUser }) {
   const [activeTab, setActiveTab] = useState(0)
+  const { currentUser, userData } = useAuth();
+  
+  const effectiveUserId = adminOverrideUser ? adminOverrideUser.uid : currentUser.uid;
+  const effectiveUsername = adminOverrideUser ? adminOverrideUser.username : (currentUser.email?.split('@')[0] || "Unknown");
+  const effectivePhc = adminOverrideUser ? adminOverrideUser.phc : (userData?.phc || "Unknown");
+  const effectiveSc = adminOverrideUser ? adminOverrideUser.sc : (userData?.sc || "Unknown");
+
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
 
   const { rows: salaryRows, totalPayment } = calculateSalary(normData, sheet1Data)
+
+  const handleLooksGood = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const reportId = `${effectiveUserId}_${headerData.month}_${headerData.year}`;
+      const reportData = {
+        userId: effectiveUserId,
+        username: effectiveUsername,
+        phc: effectivePhc,
+        subCenter: effectiveSc,
+        month: headerData.month,
+        year: headerData.year,
+        createdAt: serverTimestamp(),
+        formData: {
+          headerData,
+          normData,
+          sheet1Data
+        }
+      };
+
+      await setDoc(doc(db, "reports", reportId), reportData);
+      onPrint(); // proceed to Export step
+    } catch (err) {
+      console.error("Auto-save failed:", err);
+      setSaveError("Failed to auto-save your data. Please check your connection.");
+      setSaving(false);
+    }
+  };
 
   const sheet1Rows = INDICATORS.map((name, i) => {
     const values = sheet1Data[i] || new Array(31).fill(0)
@@ -76,6 +117,12 @@ export default function Preview({ headerData, normData, sheet1Data, onBack, onPr
       <p style={{ color: "#666", fontSize: "13px", marginBottom: "20px" }}>
         Check all sheets carefully before printing.
       </p>
+
+      {saveError && (
+        <div style={{ background: "#fff5f5", color: "#c53030", padding: "12px", borderRadius: "8px", border: "1px solid #feb2b2", marginBottom: "16px" }}>
+          {saveError}
+        </div>
+      )}
 
       {/* Header summary */}
       <div style={{
@@ -206,15 +253,17 @@ export default function Preview({ headerData, normData, sheet1Data, onBack, onPr
 
       {/* Action buttons */}
       <div style={{ display: "flex", gap: "12px", marginTop: "24px" }}>
-        <button onClick={onBack} style={{
+        <button onClick={onBack} disabled={saving} style={{
           padding: "10px 28px", background: "#e2e8f0",
-          border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "15px"
+          border: "none", borderRadius: "6px", cursor: saving ? "not-allowed" : "pointer", fontSize: "15px"
         }}>← Back & Fix</button>
-        <button onClick={onPrint} style={{
-          padding: "12px 32px", background: "#38a169",
+        <button onClick={handleLooksGood} disabled={saving} style={{
+          padding: "12px 32px", background: saving ? "#a0aec0" : "#38a169",
           color: "white", border: "none", borderRadius: "6px",
-          cursor: "pointer", fontSize: "15px", fontWeight: "bold"
-        }}>✓ Looks Good — Proceed to Export</button>
+          cursor: saving ? "not-allowed" : "pointer", fontSize: "15px", fontWeight: "bold"
+        }}>
+          {saving ? "Auto-Saving to Cloud..." : "✓ Looks Good — Proceed to Export"}
+        </button>
       </div>
     </div>
   )
